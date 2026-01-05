@@ -4,7 +4,7 @@
   "description": "تطبيق طلبات مطعم طعم الشام - إدارة وعملاء",
   "lang": "ar",
   "dir": "rtl",
-  "start_url": "/",
+  "start_url": "admin.html",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#b91c1c",
@@ -54,3 +54,4 @@
   "categories": ["food", "business", "shopping"],
   "prefer_related_applications": false
 }
+
