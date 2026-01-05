@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>طعم الشام - معاينة فورية</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap');
+        body { 
+            font-family: 'Tajawal', sans-serif; 
+            background-color: #fcfcfc; 
+            -webkit-tap-highlight-color: transparent; 
+        }
+        .auth-gradient { 
+            background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%); 
+        }
+        .glass-effect { 
+            background: rgba(255, 255, 255, 0.95); 
+            backdrop-filter: blur(10px); 
+        }
+        .product-card { 
+            transition: all 0.2s ease; 
+        }
+        .product-card:active { 
+            transform: scale(0.97); 
+        }
+        
+        /* إصلاح مشكلة الصفحة الزائدة - التمرير */
+        #checkout-section {
+            overflow-y: auto;
+            max-height: 100vh;
+        }
+        
+        /* تصميم قائمة الدول */
+        select::-ms-expand {
+            display: none;
+        }
+        
+        .select-wrapper {
+            position: relative;
+        }
+        
+        .select-wrapper i {
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="pb-28">
+
+    <!-- قسم تسجيل الدخول -->
+    <div id="auth-section" class="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+        <div class="bg-white p-8 rounded-[2.5rem] shadow-xl w-full max-w-md border border-gray-100 text-center">
+            <div class="w-16 h-16 auth-gradient rounded-2xl mx-auto mb-4 flex items-center justify-center text-white shadow-lg shadow-red-200">
+                <i data-lucide="utensils-crosses" class="w-8 h-8"></i>
+            </div>
+            <h2 class="text-2xl font-900 text-gray-800 mb-1">طعم الشام</h2>
+            <p class="text-gray-400 text-sm mb-8">سجل دخولك لبدء الطلب</p>
+            
+            <div class="space-y-3 mb-6">
+                <div class="relative">
+                    <i data-lucide="mail" class="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
+                    <input id="email" type="email" placeholder="البريد الإلكتروني" class="w-full pr-11 pl-4 py-3.5 rounded-xl bg-gray-50 border border-gray-100 outline-none focus:ring-2 focus:ring-red-500 font-bold text-sm">
+                </div>
+                <div class="relative">
+                    <i data-lucide="lock" class="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
+                    <input id="password" type="password" placeholder="كلمة المرور" class="w-full pr-11 pl-4 py-3.5 rounded-xl bg-gray-50 border border-gray-100 outline-none focus:ring-2 focus:ring-red-500 font-bold text-sm">
+                </div>
+            </div>
+            
+            <button onclick="handleAuth()" id="auth-btn" class="w-full auth-gradient text-white py-4 rounded-xl font-black shadow-lg active:scale-95 transition-all">
+                دخول / إنشاء حساب
+            </button>
+        </div>
+    </div>
+
+    <!-- التطبيق الرئيسي -->
+    <div id="main-app" class="hidden">
+        <header class="auth-gradient text-white p-6 pb-12 rounded-b-[2.5rem] shadow-lg relative overflow-hidden">
+            <div class="flex justify-between items-center relative z-10">
+                <div>
+                    <h1 class="text-2xl font-900">القائمة</h1>
+                    <p class="text-xs opacity-80">اختر وجباتك المفضلة</p>
+                </div>
+                <button onclick="logout()" class="bg-white/20 p-2.5 rounded-xl backdrop-blur-md border border-white/20">
+                    <i data-lucide="log-out" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="mt-6 flex items-center gap-3 bg-white/10 p-3 rounded-2xl backdrop-blur-sm border border-white/10 w-fit">
+                <span class="text-xs font-bold">رقم الطاولة:</span>
+                <input id="table-num" type="number" value="1" class="bg-white text-red-600 font-black w-10 h-8 rounded-lg text-center outline-none">
+            </div>
+        </header>
+
+        <main id="menu-grid" class="px-4 -mt-6 space-y-3 max-w-md mx-auto relative z-20">
+            <!-- المنتجات ستظهر هنا -->
+        </main>
+
+        <div id="cart-panel" class="fixed bottom-0 inset-x-0 glass-effect border-t p-4 hidden z-50 rounded-t-[2rem] shadow-2xl">
+            <div class="flex items-center justify-between max-w-md mx-auto">
+                <div>
+                    <p class="text-[10px] text-gray-400 font-bold">الإجمالي</p>
+                    <p id="total-price" class="text-xl font-black text-red-600">0.00 ر.س</p>
+                </div>
+                <button onclick="showCartCheckout()" id="cart-checkout-btn" class="auth-gradient text-white px-8 py-3.5 rounded-xl font-black shadow-lg flex items-center gap-2">
+                    تأكيد الطلب <i data-lucide="shopping-cart" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- صفحة Checkout معدلة مع إصلاح التمرير -->
+    <div id="checkout-section" class="fixed inset-0 bg-white z-50 hidden">
+        <div class="min-h-full p-6 max-w-md mx-auto pb-32">
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-8">
+                <button onclick="hideCheckout()" class="p-2 hover:bg-gray-100 rounded-lg">
+                    <i data-lucide="arrow-right" class="w-6 h-6 text-gray-600"></i>
+                </button>
+                <h1 class="text-2xl font-900 text-gray-800">إتمام الطلب</h1>
+                <div class="w-10"></div>
+            </div>
+
+            <!-- تفاصيل الطلب -->
+            <div id="checkout-details" class="mb-8">
+                <!-- سيتم تعبئته ديناميكياً -->
+            </div>
+
+            <!-- نموذج معلومات الزبون -->
+            <div class="mb-8">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">معلومات الزبون</h2>
+                
+                <div class="space-y-4">
+                    <!-- رقم الهاتف مع رمز الدولة -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            رقم الهاتف <span class="text-red-500">*</span>
+                        </label>
+                        <div class="flex gap-2">
+                            <!-- قائمة اختيار الدولة -->
+                            <div class="relative flex-shrink-0 w-2/5">
+                                <select id="country-code" 
+                                        class="w-full p-3.5 rounded-xl bg-gray-50 border border-gray-200 outline-none focus:ring-2 focus:ring-red-500 font-bold appearance-none text-center pr-10">
+                                    <option value="+20">🇪🇬 مصر +20</option>
+                                    <option value="+966" selected>🇸🇦 السعودية +966</option>
+                                    <option value="+971">🇦🇪 الإمارات +971</option>
+                                    <option value="+962">🇯🇴 الأردن +962</option>
+                                    <option value="+973">🇧🇭 البحرين +973</option>
+                                    <option value="+974">🇶🇦 قطر +974</option>
+                                    <option value="+968">🇴🇲 عمان +968</option>
+                                    <option value="+965">🇰🇼 الكويت +965</option>
+                                    <option value="+963">🇸🇾 سوريا +963</option>
+                                    <option value="+961">🇱🇧 لبنان +961</option>
+                                </select>
+                                <i data-lucide="chevron-down" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none"></i>
+                            </div>
+                            <!-- حقل رقم الهاتف -->
+                            <div class="relative flex-grow">
+                                <i data-lucide="phone" class="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
+                                <input id="phone-number" type="tel" 
+                                       placeholder="5XXXXXXXX"
+                                       class="w-full pr-12 pl-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 outline-none focus:ring-2 focus:ring-red-500 font-bold text-lg"
+                                       maxlength="9">
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">أدخل رقم الهاتف بدون الصفر الأول (مثال: 512345678)</p>
+                    </div>
+
+                    <!-- ملاحظات إضافية -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">ملاحظات إضافية (اختياري)</label>
+                        <textarea id="order-notes" 
+                                  placeholder="ملاحظات حول الطلب..."
+                                  rows="3"
+                                  class="w-full p-4 rounded-xl bg-gray-50 border border-gray-200 outline-none focus:ring-2 focus:ring-red-500 resize-none"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- طريقة الدفع -->
+            <div class="mb-8">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">طريقة الدفع</h2>
+                <div class="bg-green-50 border-2 border-green-500 rounded-2xl p-4 flex items-center gap-3">
+                    <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                        <i data-lucide="wallet" class="w-6 h-6 text-green-600"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-green-800">الدفع عند الاستلام</h3>
+                        <p class="text-sm text-green-600">ادفع نقداً عند توصيل الطلب لك</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ملخص الطلب -->
+            <div class="bg-gray-50 rounded-2xl p-4 mb-8">
+                <h3 class="font-bold text-gray-800 mb-3">ملخص الطلب</h3>
+                
+                <div id="order-summary" class="space-y-2 mb-4">
+                    <!-- سيتم تعبئته ديناميكياً -->
+                </div>
+                
+                <div class="border-t border-gray-200 pt-3">
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold text-gray-800">الإجمالي</span>
+                        <span id="checkout-total" class="text-2xl font-black text-red-600">0.00 ر.س</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- زر تأكيد الطلب الثابت في الأسفل -->
+        <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-4 max-w-md mx-auto z-50">
+            <button onclick="confirmOrder()" id="confirm-order-btn" 
+                    class="w-full auth-gradient text-white py-4 rounded-xl font-black shadow-lg flex items-center justify-center gap-2 text-lg">
+                <i data-lucide="check-circle" class="w-6 h-6"></i>
+                تأكيد الطلب
+            </button>
+        </div>
+    </div>
+
+    <!-- رسالة نجاح -->
+    <div id="success-message" class="fixed inset-0 bg-green-500 z-[60] hidden flex-col items-center justify-center p-6">
+        <div class="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center mb-6">
+            <i data-lucide="check" class="w-12 h-12 text-white"></i>
+        </div>
+        <h2 class="text-3xl font-black text-white mb-2">تم الطلب بنجاح!</h2>
+        <p class="text-white/90 text-center mb-8">تم استلام طلبك وسيتم تجهيزه قريباً</p>
+        <button onclick="returnToMenu()" class="bg-white text-green-600 px-8 py-3 rounded-xl font-bold">
+            العودة للقائمة
+        </button>
+    </div>
+
+    <script>
+        // إعدادات Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyCpP0TTGYb_n2zuVZKGh2WgNK0cqJVBfb0",
+            authDomain: "taste-of-sham-cccd0.firebaseapp.com",
+            projectId: "taste-of-sham-cccd0",
+            storageBucket: "taste-of-sham-cccd0.firebasestorage.app",
+            messagingSenderId: "885507234556",
+            appId: "1:885507234556:web:a18a286a11952f23189579"
+        };
+
+        // تهيئة Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let cart = [];
+        let currentCheckoutItem = null;
+        let checkoutType = 'single';
+
+        // مراقبة حالة المستخدم
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                document.getElementById('auth-section').classList.add('hidden');
+                document.getElementById('main-app').classList.remove('hidden');
+                renderMenu();
+            } else {
+                document.getElementById('auth-section').classList.remove('hidden');
+                document.getElementById('main-app').classList.add('hidden');
+                hideCheckout();
+                document.getElementById('success-message').classList.add('hidden');
+            }
+            lucide.createIcons();
+        });
+
+        // التعامل مع الدخول
+        window.handleAuth = async () => {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+            if(!email || !pass) return;
+
+            const btn = document.getElementById('auth-btn');
+            btn.disabled = true;
+            btn.innerText = "جاري التحقق...";
+
+            try {
+                await auth.signInWithEmailAndPassword(email, pass);
+            } catch (e) {
+                try {
+                    await auth.createUserWithEmailAndPassword(email, pass);
+                } catch (err) {
+                    alert("خطأ: " + err.message);
+                    btn.disabled = false;
+                    btn.innerText = "دخول / إنشاء حساب";
+                }
+            }
+        };
+
+        window.logout = () => auth.signOut();
+
+        const menu = [
+            { id: 1, name: "شاورما دجاج صاروخ", price: 18, emoji: "🌯", category: "ساندويشات" },
+            { id: 2, name: "مشويات مشكلة", price: 120, emoji: "🍢", category: "مشويات" },
+            { id: 3, name: "حمص بيروتي", price: 15, emoji: "🥣", category: "مقبلات" },
+            { id: 4, name: "كبة مقلية", price: 20, emoji: "🧆", category: "مقبلات" },
+            { id: 5, name: "شاورما لحم صاروخ", price: 22, emoji: "🌯", category: "ساندويشات" },
+            { id: 6, name: "فلافل", price: 12, emoji: "🧆", category: "ساندويشات" },
+            { id: 7, name: "دجاج مشوي", price: 45, emoji: "🍗", category: "مشويات" },
+            { id: 8, name: "كباب حلبي", price: 40, emoji: "🍢", category: "مشويات" }
+        ];
+
+        function renderMenu() {
+            const categories = {};
+            menu.forEach(item => {
+                if (!categories[item.category]) {
+                    categories[item.category] = [];
+                }
+                categories[item.category].push(item);
+            });
+
+            let html = '';
+            for (const [category, items] of Object.entries(categories)) {
+                html += `
+                    <div class="mb-6">
+                        <h2 class="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                            <span class="w-2 h-6 bg-red-500 rounded-full"></span>
+                            ${category}
+                        </h2>
+                        <div class="space-y-3">
+                `;
+                
+                items.forEach(item => {
+                    html += `
+                        <div class="product-card bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-4">
+                                    <div class="text-2xl bg-red-50 w-12 h-12 flex items-center justify-center rounded-xl">${item.emoji}</div>
+                                    <div>
+                                        <h3 class="font-bold text-gray-800">${item.name}</h3>
+                                        <p class="text-red-600 font-black">${item.price} ر.س</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button onclick="addToCart(${item.id})" class="bg-gray-100 hover:bg-gray-200 text-gray-800 p-2 rounded-xl transition-all">
+                                        <i data-lucide="plus" class="w-5 h-5"></i>
+                                    </button>
+                                    <button onclick="quickOrder(${item.id})" class="auth-gradient text-white p-2.5 rounded-xl shadow-md active:scale-90 transition-all">
+                                        <i data-lucide="shopping-bag" class="w-5 h-5"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <button onclick="quickOrder(${item.id})" class="w-full auth-gradient text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2">
+                                <i data-lucide="zap" class="w-5 h-5"></i>
+                                اطلب الآن
+                            </button>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('menu-grid').innerHTML = html;
+            lucide.createIcons();
+        }
+
+        // طلب سريع
+        window.quickOrder = (id) => {
+            const item = menu.find(m => m.id === id);
+            if (!item) return;
+            
+            currentCheckoutItem = item;
+            checkoutType = 'single';
+            showCheckout();
+        };
+
+        // إظهار صفحة checkout للسلة
+        window.showCartCheckout = () => {
+            if (cart.length === 0) return;
+            checkoutType = 'cart';
+            showCheckout();
+        };
+
+        // إظهار صفحة checkout
+        function showCheckout() {
+            const checkoutSection = document.getElementById('checkout-section');
+            checkoutSection.classList.remove('hidden');
+            
+            // تعيين السعودية كافتراضي
+            document.getElementById('country-code').value = '+966';
+            
+            updateCheckoutDisplay();
+            
+            // التمرير لأعلى الصفحة
+            checkoutSection.scrollTop = 0;
+        }
+
+        // إخفاء صفحة checkout
+        window.hideCheckout = () => {
+            document.getElementById('checkout-section').classList.add('hidden');
+        };
+
+        // تحديث عرض checkout
+        function updateCheckoutDisplay() {
+            const items = checkoutType === 'single' ? [currentCheckoutItem] : cart;
+            const total = items.reduce((sum, item) => sum + item.price, 0);
+            
+            let detailsHtml = '';
+            let summaryHtml = '';
+            
+            if (checkoutType === 'single') {
+                const item = currentCheckoutItem;
+                detailsHtml = `
+                    <div class="flex items-center gap-4 bg-gray-50 rounded-2xl p-4">
+                        <div class="text-3xl bg-red-50 w-16 h-16 flex items-center justify-center rounded-xl">${item.emoji}</div>
+                        <div>
+                            <h3 class="font-bold text-gray-800 text-lg">${item.name}</h3>
+                            <p class="text-red-600 font-black text-xl">${item.price} ر.س</p>
+                        </div>
+                    </div>
+                `;
+                
+                summaryHtml = `
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-700">${item.name}</span>
+                        <span class="font-bold text-gray-800">${item.price} ر.س</span>
+                    </div>
+                `;
+            } else {
+                detailsHtml = `
+                    <div class="bg-gray-50 rounded-2xl p-4">
+                        <h3 class="font-bold text-gray-800 mb-3">${cart.length} عنصر في السلة</h3>
+                        <div class="space-y-2">
+                `;
+                
+                items.forEach(item => {
+                    detailsHtml += `
+                        <div class="flex justify-between items-center py-2 border-b border-gray-200 last:border-0">
+                            <div class="flex items-center gap-3">
+                                <span class="text-xl">${item.emoji}</span>
+                                <span class="text-gray-700">${item.name}</span>
+                            </div>
+                            <span class="font-bold text-gray-800">${item.price} ر.س</span>
+                        </div>
+                    `;
+                    
+                    summaryHtml += `
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-700">${item.name}</span>
+                            <span class="font-bold text-gray-800">${item.price} ر.س</span>
+                        </div>
+                    `;
+                });
+                
+                detailsHtml += `</div></div>`;
+            }
+            
+            document.getElementById('checkout-details').innerHTML = detailsHtml;
+            document.getElementById('order-summary').innerHTML = summaryHtml;
+            document.getElementById('checkout-total').textContent = total.toFixed(2) + ' ر.س';
+            
+            // مسح الحقول السابقة
+            document.getElementById('phone-number').value = '';
+            document.getElementById('order-notes').value = '';
+            
+            lucide.createIcons();
+        }
+
+        window.addToCart = (id) => {
+            const item = menu.find(m => m.id === id);
+            if (item) {
+                cart.push(item);
+                updateCart();
+                const btn = event.target.closest('button');
+                if (btn) {
+                    btn.innerHTML = '<i data-lucide="check" class="w-5 h-5"></i>';
+                    setTimeout(() => {
+                        btn.innerHTML = '<i data-lucide="plus" class="w-5 h-5"></i>';
+                        lucide.createIcons();
+                    }, 1000);
+                }
+            }
+        };
+
+        function updateCart() {
+            const total = cart.reduce((s, i) => s + i.price, 0);
+            document.getElementById('total-price').textContent = total.toFixed(2) + " ر.س";
+            document.getElementById('cart-panel').classList.toggle('hidden', cart.length === 0);
+            lucide.createIcons();
+        }
+
+        // تأكيد الطلب مع رمز الدولة
+        window.confirmOrder = async () => {
+            const countryCode = document.getElementById('country-code').value;
+            const phoneDigits = document.getElementById('phone-number').value.trim();
+            const orderNotes = document.getElementById('order-notes').value.trim();
+            const tableNum = document.getElementById('table-num').value;
+            const fullPhoneNumber = countryCode + phoneDigits;
+            
+            // تحقق من رقم الهاتف
+            if (!phoneDigits || phoneDigits.length !== 9) {
+                alert('يرجى إدخال رقم هاتف صحيح (9 أرقام بدون الصفر الأول)');
+                document.getElementById('phone-number').focus();
+                return;
+            }
+            
+            // تحقق أن جميع الأرقام
+            if (!/^\d+$/.test(phoneDigits)) {
+                alert('يجب أن يحتوي رقم الهاتف على أرقام فقط');
+                document.getElementById('phone-number').focus();
+                return;
+            }
+            
+            const items = checkoutType === 'single' ? [currentCheckoutItem] : cart;
+            const total = items.reduce((sum, item) => sum + item.price, 0);
+            
+            const btn = document.getElementById('confirm-order-btn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i> جاري الإرسال...';
+            
+            try {
+                await db.collection("orders").add({
+                    userId: auth.currentUser.uid,
+                    userEmail: auth.currentUser.email,
+                    phoneNumber: fullPhoneNumber,
+                    countryCode: countryCode,
+                    table: tableNum,
+                    items: items.map(i => i.name),
+                    itemDetails: items,
+                    total: total,
+                    paymentMethod: 'cash_on_delivery',
+                    paymentStatus: 'pending',
+                    status: 'pending',
+                    notes: orderNotes,
+                    type: checkoutType,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    timestamp: new Date()
+                });
+                
+                // إظهار رسالة النجاح
+                hideCheckout();
+                document.getElementById('success-message').classList.remove('hidden');
+                
+                // تفريغ السلة إذا كان الطلب من السلة
+                if (checkoutType === 'cart') {
+                    cart = [];
+                    updateCart();
+                }
+                
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                
+            } catch (error) {
+                console.error("Error sending order:", error);
+                alert("حدث خطأ أثناء إرسال الطلب: " + error.message);
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        };
+
+        window.returnToMenu = () => {
+            document.getElementById('success-message').classList.add('hidden');
+        };
+
+        // إدخال رقم الهاتف مع منع غير الأرقام
+        document.getElementById('phone-number').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            value = value.substring(0, 9);
+            e.target.value = value;
+        });
+
+        // تحميل الأيقونات
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            
+            // دعم إدخال Enter في حقول تسجيل الدخول
+            document.getElementById('password').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    handleAuth();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
